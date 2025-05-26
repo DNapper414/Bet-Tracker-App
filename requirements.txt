@@ -1,0 +1,6 @@
+streamlit
+pandas
+requests
+nba_api
+supabase
+streamlit-autorefresh
