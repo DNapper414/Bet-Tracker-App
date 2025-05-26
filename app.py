@@ -20,9 +20,8 @@ response = get_projections(user_id)
 projections = response.data if hasattr(response, "data") else []
 projections_today = [p for p in projections if p["date"] == date_str and p["sport"] == "MLB"]
 
-# --- Add New Projection ---
+# Add projection
 st.subheader("➕ Add New Player Projection")
-
 try:
     players = get_mlb_players_today(date_str)
 except:
@@ -47,7 +46,7 @@ if st.button("Add to Tracker"):
     st.success("✅ Added!")
     st.rerun()
 
-# --- Evaluate Incomplete ---
+# Evaluate incomplete
 incomplete = [p for p in projections_today if p["actual"] is None]
 
 if incomplete:
@@ -59,8 +58,7 @@ if incomplete:
         boxscores = [b for b in map(fetch_boxscore, game_ids) if b]
 
         df = pd.DataFrame(incomplete)
-        df.columns = df.columns.str.lower()  # ✅ Fix: ensure lowercase keys
-
+        df.columns = df.columns.str.lower()  # ✅ Normalize column names
         results = evaluate_projections(df, boxscores)
 
         for r in results:
@@ -71,14 +69,14 @@ if incomplete:
     except Exception as e:
         st.error(f"❌ Error evaluating stats: {e}")
 
-# --- Reset All Projections ---
+# Reset all
 if projections_today and st.button("🧹 Reset All Projections"):
     for p in projections_today:
         remove_projection(user_id, p["id"])
-    st.success("✅ All projections removed.")
+    st.success("✅ All removed.")
     st.rerun()
 
-# --- Show Table with Remove Buttons ---
+# Show table
 st.subheader("📋 Projections for " + date_str)
 
 if projections_today:
