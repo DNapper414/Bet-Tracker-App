@@ -21,22 +21,13 @@ def evaluate_projections(projections_df, boxscores):
         actual = 0
         found = False
 
-        st.write(f"🔎 Evaluating {name} for metric '{metric}'")
-
         for box in boxscores:
             for team in ["home", "away"]:
                 team_players = box["teams"][team]["players"]
-                all_names = [pdata["person"]["fullName"] for pdata in team_players.values()]
-                st.write(f"📋 {team.title()} players:", all_names)
-
                 for pdata in team_players.values():
                     pname = pdata["person"]["fullName"].strip().lower()
-                    st.write(f"🧪 Comparing {name} vs {pname}")
-
                     if name in pname or pname in name:
                         stats = pdata.get("stats", {}).get("batting", {})
-                        st.write(f"📊 Matched! Stats found:", stats)
-
                         if metric in stats:
                             actual = stats[metric]
                             found = True
@@ -47,14 +38,12 @@ def evaluate_projections(projections_df, boxscores):
                 break
 
         results.append({
-            "Player": row["Player"],
-            "Metric": metric,
-            "Target": target,
-            "Actual": actual if found else None,
-            "✅ Met?": actual >= target if found else False
+            "player": row["Player"],
+            "metric": metric,
+            "target": target,
+            "actual": actual if found else None,
+            "met": actual >= target if found else False
         })
-
-    st.write("✅ Final evaluated results:", results)
     return results
 
 def get_mlb_players_today(date_str):
@@ -90,15 +79,11 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
         actual = 0
         found = False
 
-        st.write(f"🔎 Evaluating NBA player {name} for metric '{metric}'")
-
         for gid in game_ids:
             time.sleep(0.6)
             df = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=gid).player_stats.get_data_frame()
             for _, p in df.iterrows():
                 pname = p["PLAYER_NAME"].strip().lower()
-                st.write(f"🧪 Comparing {name} vs {pname}")
-
                 if name in pname or pname in name:
                     found = True
                     if metric == "PRA":
@@ -112,12 +97,10 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
                 break
 
         results.append({
-            "Player": row["Player"],
-            "Metric": metric,
-            "Target": target,
-            "Actual": actual if found else None,
-            "✅ Met?": actual >= target if found else False
+            "player": row["Player"],
+            "metric": metric,
+            "target": target,
+            "actual": actual if found else None,
+            "met": actual >= target if found else False
         })
-
-    st.write("✅ Final NBA evaluation results:", results)
     return results
