@@ -2,6 +2,7 @@ import requests
 import time
 from datetime import datetime
 from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv2
+import streamlit as st
 
 def fetch_boxscore(game_id):
     url = f"https://statsapi.mlb.com/api/v1/game/{game_id}/boxscore"
@@ -19,14 +20,23 @@ def evaluate_projections(projections_df, boxscores):
         target = row["Target"]
         actual = 0
         found = False
+
+        st.write(f"🔎 Evaluating {name} for metric '{metric}'")
+
         for box in boxscores:
             for team in ["home", "away"]:
-                for pdata in box["teams"][team]["players"].values():
+                team_players = box["teams"][team]["players"]
+                all_names = [pdata["person"]["fullName"] for pdata in team_players.values()]
+                st.write(f"📋 {team.title()} players:", all_names)
+
+                for pdata in team_players.values():
                     pname = pdata["person"]["fullName"].strip().lower()
-                    print(f"🔎 Comparing {name} vs {pname}")
+                    st.write(f"🧪 Comparing {name} vs {pname}")
+
                     if name in pname or pname in name:
                         stats = pdata.get("stats", {}).get("batting", {})
-                        print(f"🧾 Player stats: {stats}")
+                        st.write(f"📊 Matched! Stats found:", stats)
+
                         if metric in stats:
                             actual = stats[metric]
                             found = True
@@ -35,6 +45,7 @@ def evaluate_projections(projections_df, boxscores):
                     break
             if found:
                 break
+
         results.append({
             "Player": row["Player"],
             "Metric": metric,
@@ -42,6 +53,8 @@ def evaluate_projections(projections_df, boxscores):
             "Actual": actual if found else None,
             "✅ Met?": actual >= target if found else False
         })
+
+    st.write("✅ Final evaluated results:", results)
     return results
 
 def get_mlb_players_today(date_str):
@@ -76,12 +89,16 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
         metric, target = row["Metric"], row["Target"]
         actual = 0
         found = False
+
+        st.write(f"🔎 Evaluating NBA player {name} for metric '{metric}'")
+
         for gid in game_ids:
             time.sleep(0.6)
             df = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=gid).player_stats.get_data_frame()
             for _, p in df.iterrows():
                 pname = p["PLAYER_NAME"].strip().lower()
-                print(f"🔎 Comparing {name} vs {pname}")
+                st.write(f"🧪 Comparing {name} vs {pname}")
+
                 if name in pname or pname in name:
                     found = True
                     if metric == "PRA":
@@ -93,6 +110,7 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
                     break
             if found:
                 break
+
         results.append({
             "Player": row["Player"],
             "Metric": metric,
@@ -100,4 +118,6 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
             "Actual": actual if found else None,
             "✅ Met?": actual >= target if found else False
         })
+
+    st.write("✅ Final NBA evaluation results:", results)
     return results
