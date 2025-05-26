@@ -58,7 +58,7 @@ if incomplete:
         boxscores = [b for b in map(fetch_boxscore, game_ids) if b]
 
         df = pd.DataFrame(incomplete)
-        df.columns = df.columns.str.lower()  # ✅ Normalize column names
+        df.columns = df.columns.str.lower()
         results = evaluate_projections(df, boxscores)
 
         for r in results:
@@ -83,8 +83,10 @@ if projections_today:
     for row in projections_today:
         col1, col2 = st.columns([5, 1])
         with col1:
+            status = "✅" if row.get("met") is True else "❌" if row.get("met") is False else "—"
             st.write(
-                f"**{row['player']}** | {row['metric']} | 🎯 {row['target']} | 📊 {row.get('actual', '—')} | ✅ {row.get('met', '—')}")
+                f"**{row['player']}** | {row['metric']} | 🎯 {row['target']} | 📊 {row.get('actual', '—')} | {status}"
+            )
         with col2:
             if st.button("❌ Remove", key=f"remove_{row['id']}"):
                 remove_projection(user_id, row["id"])
