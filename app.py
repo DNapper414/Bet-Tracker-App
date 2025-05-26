@@ -1,7 +1,7 @@
+import os
 import streamlit as st
 import pandas as pd
 import requests
-import uuid
 from datetime import datetime
 from utils import (
     fetch_boxscore,
@@ -17,10 +17,12 @@ from supabase_client import (
     update_projection_result
 )
 
+# Port binding for Railway
+os.environ["STREAMLIT_SERVER_PORT"] = os.getenv("PORT", "8080")
+
 st.set_page_config(page_title="Bet Tracker by Apprentice Ent. Sports Picks", layout="centered")
 st.title("🏀⚾ Bet Tracker by Apprentice Ent. Sports Picks")
 
-# ✅ Simple fix: hardcoded user_id
 if "user_id" not in st.session_state or not st.session_state.user_id:
     st.session_state.user_id = "guest"
 user_id = st.session_state.user_id
@@ -39,11 +41,19 @@ st.session_state.last_sport = sport
 
 if "projections" not in st.session_state:
     response = get_projections(user_id)
-    st.session_state.projections = response.data if response.data else []
+    st.write("🧩 Full Supabase response:", response)
+    if hasattr(response, "data"):
+        st.session_state.projections = response.data
+    else:
+        st.warning("⚠️ Supabase response has no .data")
+        st.session_state.projections = []
 all_projections = st.session_state.projections
 
 filtered = [p for p in all_projections if p.get("date") == date_str]
+st.write("🔍 Filtered projections for date", date_str, ":", filtered)
+
 df = pd.DataFrame(filtered)
+st.write("📊 Resulting DataFrame:", df)
 
 if not df.empty:
     df.rename(columns={
@@ -87,6 +97,7 @@ if st.button("➕ Add to Table"):
     st.info("⏳ Adding projection...")
     try:
         response = add_projection(new_proj)
+        st.write("📦 add_projection returned:", response.data)
         if response.data:
             st.session_state.projections.append(response.data[0])
             st.success("✅ Added!")
@@ -95,84 +106,3 @@ if st.button("➕ Add to Table"):
     except Exception as e:
         st.error(f"❌ Failed to add projection: {e}")
     st.rerun()
-
-st.subheader("📊 Results")
-
-if df.empty:
-    st.info("No projections added for this date.")
-else:
-    if st.button("🧹 Clear All Projections"):
-        for row in df.itertuples():
-            remove_projection(user_id, row.id)
-        st.session_state.projections = [p for p in st.session_state.projections if p["date"] != date_str]
-        st.rerun()
-
-    need_eval = df[df["Actual"].isnull()]
-    if not need_eval.empty:
-        sports_in_data = df["Sport"].unique()
-        fresh_results = []
-
-        if "MLB" in sports_in_data:
-            schedule_url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}"
-            resp = requests.get(schedule_url).json()
-            game_ids = [
-                str(game["gamePk"])
-                for d in resp.get("dates", [])
-                for game in d.get("games", [])
-                if game.get("status", {}).get("abstractGameState") in ["Final", "Live", "In Progress"]
-            ]
-            boxscores = [fetch_boxscore(gid) for gid in game_ids if fetch_boxscore(gid)]
-            mlb_results = evaluate_projections(df[df["Sport"] == "MLB"], boxscores)
-            for r in mlb_results:
-                r["Sport"] = "MLB"
-            fresh_results += mlb_results
-
-        if "NBA" in sports_in_data:
-            nba_results = evaluate_projections_nba_nbaapi(df[df["Sport"] == "NBA"], date_str)
-            for r in nba_results:
-                r["Sport"] = "NBA"
-            fresh_results += nba_results
-
-        for eval_row in fresh_results:
-            match = next(
-                (p for p in st.session_state.projections if
-                 p["player"] == eval_row["Player"] and
-                 p["metric"] == eval_row["Metric"] and
-                 str(p["target"]) == str(eval_row["Target"]) and
-                 p["sport"] == eval_row["Sport"] and
-                 p["date"] == date_str),
-                None
-            )
-            if match:
-                update_projection_result(match["id"], eval_row["Actual"], eval_row["✅ Met?"])
-        st.rerun()
-
-    st.markdown("""
-    <style>
-    div[data-testid="column"] {
-        overflow-x: auto;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    col_config = [1.5, 2, 2, 1.5, 1.5, 1.5, 1]
-    header = st.columns(col_config)
-    for col, title in zip(header, ["Sport", "Player", "Metric", "Target", "Actual", "✅ Met?", ""]):
-        col.markdown(f"**{title}**")
-
-    for _, row in df.iterrows():
-        cols = st.columns(col_config)
-        cols[0].markdown(row["Sport"])
-        cols[1].markdown(row["Player"])
-        cols[2].markdown(row["Metric"])
-        cols[3].markdown(str(row["Target"]))
-        cols[4].markdown(str(row["Actual"]) if row["Actual"] is not None else "N/A")
-        cols[5].markdown("✅" if row["✅ Met?"] else "❌")
-        if cols[6].button("❌", key=f"remove_{row['id']}"):
-            remove_projection(user_id, row["id"])
-            st.session_state.projections = [p for p in st.session_state.projections if p["id"] != row["id"]]
-            st.rerun()
-
-    csv_df = df[["Sport", "Player", "Metric", "Target", "Actual", "✅ Met?"]]
-    csv = csv_df.to_csv(index=False).encode("utf-8")
-    st.download_button("📥 Download Results CSV", csv, file_name="bet_results.csv")
