@@ -13,9 +13,15 @@ st.title("📊 Bet Tracker - MLB")
 
 user_id = st.session_state.get("user_id", "guest")
 
-selected_date = st.date_input("📅 Select Game Date", value=datetime.today())
+# ✅ Persist date in session
+if "selected_date" not in st.session_state:
+    st.session_state["selected_date"] = datetime.today()
+
+selected_date = st.date_input("📅 Select Game Date", value=st.session_state["selected_date"])
+st.session_state["selected_date"] = selected_date
 date_str = selected_date.strftime("%Y-%m-%d")
 
+# Load projections
 response = get_projections(user_id)
 projections = response.data if hasattr(response, "data") else []
 projections_today = [p for p in projections if p["date"] == date_str and p["sport"] == "MLB"]
