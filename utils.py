@@ -59,7 +59,7 @@ def get_nba_players_today(date_str):
     game_ids = scoreboardv2.ScoreboardV2(game_date=date_obj.strftime("%m/%d/%Y")).game_header.get_data_frame()["GAME_ID"]
     players = set()
     for gid in game_ids:
-        time.sleep(0.6)
+        time.sleep(0.6)  # Rate limit buffer
         df = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=gid).player_stats.get_data_frame()
         players.update(df["PLAYER_NAME"])
     return sorted(players)
