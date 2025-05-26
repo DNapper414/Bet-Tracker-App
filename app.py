@@ -20,14 +20,14 @@ response = get_projections(user_id)
 projections = response.data if hasattr(response, "data") else []
 projections_today = [p for p in projections if p["date"] == date_str and p["sport"] == "MLB"]
 
-# --- Add Projection ---
+# --- Add New Projection ---
 st.subheader("➕ Add New Player Projection")
 
 try:
     players = get_mlb_players_today(date_str)
 except:
     players = []
-    st.warning("⚠️ Could not load player list.")
+    st.warning("⚠️ Could not fetch MLB players.")
 
 player = st.selectbox("Player", players) if players else st.text_input("Player")
 metric = st.selectbox("Metric", ["hits", "homeRuns", "totalBases", "rbi", "baseOnBalls", "runs", "stolenBases"])
@@ -59,24 +59,26 @@ if incomplete:
         boxscores = [b for b in map(fetch_boxscore, game_ids) if b]
 
         df = pd.DataFrame(incomplete)
+        df.columns = df.columns.str.lower()  # ✅ Fix: ensure lowercase keys
+
         results = evaluate_projections(df, boxscores)
 
         for r in results:
-            match = next((p for p in projections_today if p["player"] == r["Player"] and p["metric"] == r["Metric"]), None)
-            if match and r["Actual"] is not None:
-                update_projection_result(match["id"], r["Actual"], r["✅ Met?"])
+            match = next((p for p in projections_today if p["player"] == r["player"] and p["metric"] == r["metric"]), None)
+            if match and r["actual"] is not None:
+                update_projection_result(match["id"], r["actual"], r["met"])
         st.rerun()
     except Exception as e:
-        st.error(f"❌ Error during evaluation: {e}")
+        st.error(f"❌ Error evaluating stats: {e}")
 
-# --- Reset All ---
+# --- Reset All Projections ---
 if projections_today and st.button("🧹 Reset All Projections"):
     for p in projections_today:
         remove_projection(user_id, p["id"])
-    st.success("🗑 All projections removed.")
+    st.success("✅ All projections removed.")
     st.rerun()
 
-# --- Display Table with Remove Buttons ---
+# --- Show Table with Remove Buttons ---
 st.subheader("📋 Projections for " + date_str)
 
 if projections_today:
