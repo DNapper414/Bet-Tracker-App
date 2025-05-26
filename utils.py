@@ -22,8 +22,11 @@ def evaluate_projections(projections_df, boxscores):
         for box in boxscores:
             for team in ["home", "away"]:
                 for pdata in box["teams"][team]["players"].values():
-                    if pdata["person"]["fullName"].strip().lower() == name:
+                    pname = pdata["person"]["fullName"].strip().lower()
+                    print(f"🔎 Comparing {name} vs {pname}")
+                    if name in pname or pname in name:
                         stats = pdata.get("stats", {}).get("batting", {})
+                        print(f"🧾 Player stats: {stats}")
                         if metric in stats:
                             actual = stats[metric]
                             found = True
@@ -59,7 +62,7 @@ def get_nba_players_today(date_str):
     game_ids = scoreboardv2.ScoreboardV2(game_date=date_obj.strftime("%m/%d/%Y")).game_header.get_data_frame()["GAME_ID"]
     players = set()
     for gid in game_ids:
-        time.sleep(0.6)  # Rate limit buffer
+        time.sleep(0.6)
         df = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=gid).player_stats.get_data_frame()
         players.update(df["PLAYER_NAME"])
     return sorted(players)
@@ -78,6 +81,7 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
             df = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=gid).player_stats.get_data_frame()
             for _, p in df.iterrows():
                 pname = p["PLAYER_NAME"].strip().lower()
+                print(f"🔎 Comparing {name} vs {pname}")
                 if name in pname or pname in name:
                     found = True
                     if metric == "PRA":
