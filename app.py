@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from datetime import date
 from utils import evaluate_projections_mlb, evaluate_projections_nba
 from supabase_client import get_projections, add_projection, remove_projection, update_projection_result
