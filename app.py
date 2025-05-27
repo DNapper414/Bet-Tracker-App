@@ -19,7 +19,7 @@ st.title("📊 Bet Tracker")
 
 user_id = st.session_state.get("user_id", "guest")
 
-# ✅ Persist date
+# Persist date
 if "selected_date" not in st.session_state:
     st.session_state["selected_date"] = datetime.today()
 
@@ -27,18 +27,18 @@ selected_date = st.date_input("📅 Select Game Date", value=st.session_state["s
 st.session_state["selected_date"] = selected_date
 date_str = selected_date.strftime("%Y-%m-%d")
 
-# ✅ Persist sport
+# Persist sport
 if "sport" not in st.session_state:
     st.session_state["sport"] = "MLB"
 sport = st.radio("🏀 Select Sport", ["MLB", "NBA"], index=["MLB", "NBA"].index(st.session_state["sport"]))
 st.session_state["sport"] = sport
 
-# Load projections
+# Load all projections for this user/date (no sport filter)
 response = get_projections(user_id)
 projections = response.data if hasattr(response, "data") else []
-projections_today = [p for p in projections if p["date"] == date_str and p["sport"] == sport]
+projections_today = [p for p in projections if p["date"] == date_str]
 
-# -------- Add Projection --------
+# --- Add Projection ---
 st.subheader(f"➕ Add {sport} Player Projection")
 
 try:
@@ -68,41 +68,47 @@ if st.button("Add to Tracker"):
     st.success("✅ Added!")
     st.rerun()
 
-# -------- Evaluate Projections --------
-incomplete = [p for p in projections_today if p["actual"] is None]
+# --- Evaluate Incomplete Projections ---
+incomplete_mlb = [p for p in projections_today if p["actual"] is None and p["sport"] == "MLB"]
+incomplete_nba = [p for p in projections_today if p["actual"] is None and p["sport"] == "NBA"]
 
-if incomplete:
+if incomplete_mlb or incomplete_nba:
     st.info("🔍 Evaluating pending projections...")
     try:
-        df = pd.DataFrame(incomplete)
-        df.columns = df.columns.str.lower()
-
-        if sport == "MLB":
+        if incomplete_mlb:
+            df = pd.DataFrame(incomplete_mlb)
+            df.columns = df.columns.str.lower()
             sched_url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}"
             games = requests.get(sched_url).json().get("dates", [])[0].get("games", [])
             game_ids = [g["gamePk"] for g in games if g["status"]["abstractGameState"] in ["Final", "Live"]]
             boxscores = [b for b in map(fetch_boxscore, game_ids) if b]
             results = evaluate_projections(df, boxscores)
-        else:
-            results = evaluate_projections_nba_nbaapi(df, date_str)
+            for r in results:
+                match = next((p for p in projections_today if p["player"] == r["player"] and p["metric"] == r["metric"]), None)
+                if match and r["actual"] is not None:
+                    update_projection_result(match["id"], r["actual"], r["met"])
 
-        for r in results:
-            match = next((p for p in projections_today if p["player"] == r["player"] and p["metric"] == r["metric"]), None)
-            if match and r["actual"] is not None:
-                update_projection_result(match["id"], r["actual"], r["met"])
+        if incomplete_nba:
+            df = pd.DataFrame(incomplete_nba)
+            df.columns = df.columns.str.lower()
+            results = evaluate_projections_nba_nbaapi(df, date_str)
+            for r in results:
+                match = next((p for p in projections_today if p["player"] == r["player"] and p["metric"] == r["metric"]), None)
+                if match and r["actual"] is not None:
+                    update_projection_result(match["id"], r["actual"], r["met"])
         st.rerun()
     except Exception as e:
         st.error(f"❌ Error evaluating stats: {e}")
 
-# -------- Reset All --------
+# --- Reset All ---
 if projections_today and st.button("🧹 Reset All Projections"):
     for p in projections_today:
         remove_projection(user_id, p["id"])
     st.success("✅ All removed.")
     st.rerun()
 
-# -------- Show Table --------
-st.subheader(f"📋 {sport} Projections for {date_str}")
+# --- Show Unified Table ---
+st.subheader(f"📋 All Projections for {date_str}")
 
 if projections_today:
     for row in projections_today:
@@ -110,7 +116,7 @@ if projections_today:
         with col1:
             status = "✅" if row.get("met") is True else "❌" if row.get("met") is False else "—"
             st.write(
-                f"**{row['player']}** | {row['metric']} | 🎯 {row['target']} | 📊 {row.get('actual', '—')} | {status}"
+                f"**{row['player']}** ({row['sport']}) | {row['metric']} | 🎯 {row['target']} | 📊 {row.get('actual', '—')} | {status}"
             )
         with col2:
             if st.button("❌ Remove", key=f"remove_{row['id']}"):
