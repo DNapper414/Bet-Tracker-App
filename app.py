@@ -12,6 +12,7 @@ if "selected_date" not in st.session_state:
 st.title("Player Projections Tracker")
 st.caption("Track your MLB and NBA player performance projections.")
 
+# User Inputs
 sport = st.selectbox("Select Sport", ["MLB", "NBA"])
 player = st.text_input("Enter Player Name")
 metric = st.selectbox("Select Metric", ["hits"] if sport == "MLB" else ["points"])
@@ -40,6 +41,7 @@ if st.button("Reset Table"):
         remove_projection(user_id, p["id"])
     st.success("Table cleared!")
 
+# Load and Evaluate
 projections = get_projections(user_id)
 rows = projections.data if projections else []
 
@@ -53,8 +55,17 @@ for p in mlb_rows + nba_rows:
     if p["actual"] is not None:
         update_projection_result(p["id"], p["actual"], p["met"])
 
+# Display Table with Headers
 if rows:
     st.subheader("Your Projections")
+
+    # Column headers
+    header_cols = st.columns(7)
+    headers = ["Player", "Metric", "Target", "Actual", "Met", "Date", "Action"]
+    for col, h in zip(header_cols, headers):
+        col.markdown(f"**{h}**")
+
+    # Row values
     for p in rows:
         col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
         with col1:
