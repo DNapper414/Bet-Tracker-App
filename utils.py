@@ -25,7 +25,7 @@ def evaluate_projections(projections_df, boxscores):
                 team_players = box["teams"][team]["players"]
                 for pdata in team_players.values():
                     pname = pdata["person"]["fullName"].strip().lower()
-                    if name in pname or pname in name:
+                    if name == pname or name in pname or pname in name:
                         stats = pdata.get("stats", {}).get("batting", {})
                         if metric in stats:
                             actual = stats[metric]
@@ -57,11 +57,12 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
         found = False
 
         for gid in game_ids:
-            time.sleep(0.6)  # prevent rate limit
+            time.sleep(0.6)
             df = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=gid).player_stats.get_data_frame()
             for _, p in df.iterrows():
                 pname = p["PLAYER_NAME"].strip().lower()
-                if name in pname or pname in name:
+
+                if name == pname or name in pname or pname in name:
                     found = True
                     if metric == "PRA":
                         actual = p.get("PTS", 0) + p.get("REB", 0) + p.get("AST", 0)
