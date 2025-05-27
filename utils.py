@@ -52,7 +52,8 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
 
     for _, row in projections_df.iterrows():
         name = row["player"].strip().lower()
-        metric, target = row["metric"], row["target"]
+        metric = row["metric"]
+        target = row["target"]
         actual = 0
         found = False
 
