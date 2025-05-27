@@ -58,11 +58,10 @@ def evaluate_projections_nba_nbaapi(projections_df, date_str):
         found = False
 
         for gid in game_ids:
-            time.sleep(0.6)
+            time.sleep(0.6)  # prevent rate limiting
             df = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=gid).player_stats.get_data_frame()
             for _, p in df.iterrows():
                 pname = p["PLAYER_NAME"].strip().lower()
-
                 if name == pname or name in pname or pname in name:
                     found = True
                     if metric == "PRA":
