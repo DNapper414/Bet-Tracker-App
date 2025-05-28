@@ -78,19 +78,23 @@ def evaluate_projection(projection):
                     if full_name == player_name:
                         stats = item["statistics"]
                         if projection["metric"] == "points":
-                            actual = stats.get("points", 0)
+                            actual = int(stats.get("points", 0))
                         elif projection["metric"] == "rebounds":
-                            actual = stats.get("totReb", 0)
+                            actual = int(stats.get("totReb", 0))
                         elif projection["metric"] == "assist":
-                            actual = stats.get("assists", 0)
+                            actual = int(stats.get("assists", 0))
                         elif projection["metric"] == "PRA":
-                            actual = stats.get("points", 0) + stats.get("totReb", 0) + stats.get("assists", 0)
+                            actual = (
+                                int(stats.get("points", 0)) +
+                                int(stats.get("totReb", 0)) +
+                                int(stats.get("assists", 0))
+                            )
                         elif projection["metric"] == "blocks":
-                            actual = stats.get("blocks", 0)
+                            actual = int(stats.get("blocks", 0))
                         elif projection["metric"] == "steals":
-                            actual = stats.get("steals", 0)
+                            actual = int(stats.get("steals", 0))
                         elif projection["metric"] == "3pt made":
-                            actual = stats.get("tpm", 0)
+                            actual = int(stats.get("tpm", 0))
                         break
 
         except Exception:
