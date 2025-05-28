@@ -17,20 +17,17 @@ import pandas as pd
 st.set_page_config(page_title="Bet Tracker App", layout="centered")
 st.title("📊 Bet Tracker App")
 
-# Initialize session state
 if "selected_date" not in st.session_state:
     st.session_state.selected_date = datetime.now().date()
 if "projections" not in st.session_state:
     st.session_state.projections = []
 
-# Sidebar inputs
 sport = st.selectbox("Select Sport", ["MLB", "NBA"])
 selected_date = st.date_input("Select Game Date", value=st.session_state.selected_date)
 st.session_state.selected_date = selected_date
 
-# Autocomplete for players
-players = get_players_for_date(sport, selected_date)
-selected_player = st.selectbox("Select Player", players)
+players = get_players_for_date(sport, selected_date.isoformat())
+selected_player = st.selectbox("Select Player", players if players else ["No players found"])
 
 metric = st.selectbox("Select Metric", METRICS_BY_SPORT[sport])
 target = st.number_input("Set Target", min_value=0)
@@ -49,11 +46,9 @@ if st.button("Add to Tracker"):
     add_projection(projection)
     st.success("Projection added!")
 
-# Load projections and display
 projections = get_projections("guest")
 df = pd.DataFrame(projections.data if projections else [])
 
-# Evaluate
 if st.button("Evaluate All"):
     for i, row in df.iterrows():
         if row["actual"] is None:
@@ -61,7 +56,6 @@ if st.button("Evaluate All"):
             update_projection_result(row["id"], actual, met)
     st.experimental_rerun()
 
-# Delete
 if not df.empty:
     st.subheader("📋 Your Tracker Table")
     for idx, row in df.iterrows():
