@@ -1,5 +1,6 @@
-streamlit>=1.30.0
-pandas>=1.5.3
-requests>=2.28.2
-python-dotenv>=1.0.0
-supabase>=1.0.3
+streamlit
+pandas
+statsapi
+requests
+nba_api
+supabase
