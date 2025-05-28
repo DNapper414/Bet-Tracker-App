@@ -1,18 +1,19 @@
 import requests
 import os
 from datetime import datetime
+from functools import lru_cache
 
 METRICS_BY_SPORT = {
     "MLB": ["hits", "homeruns", "RBI", "runs", "Total Bases", "stolen bases"],
     "NBA": ["points", "rebounds", "assist", "PRA", "blocks", "steals", "3pt made"]
 }
 
-# Static fallback NBA player names
 FALLBACK_NBA_PLAYERS = [
     "LeBron James", "Stephen Curry", "Kevin Durant", "Jayson Tatum", "Giannis Antetokounmpo"
 ]
 
-def get_players_for_date(sport, date):
+@lru_cache(maxsize=128)
+def get_players_for_date(sport, date_str):
     if sport == "MLB":
         return ["Aaron Judge", "Mookie Betts", "Shohei Ohtani", "Mike Trout"]
 
@@ -20,15 +21,14 @@ def get_players_for_date(sport, date):
         try:
             games_url = "https://api-nba-v1.p.rapidapi.com/games"
             headers = {
-                "x-rapidapi-key": "47945fd24fmsh2539580c53289bdp119b78jsne5525ec5acdf",
+                "x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
                 "x-rapidapi-host": "api-nba-v1.p.rapidapi.com"
             }
-            params = {"date": date}
+            params = {"date": date_str}
             response = requests.get(games_url, headers=headers, params=params)
             games = response.json().get("response", [])
 
             player_names = set()
-
             for game in games:
                 game_id = game.get("id")
                 stats_url = "https://api-nba-v1.p.rapidapi.com/players/statistics"
@@ -51,7 +51,7 @@ def evaluate_projection(projection):
     actual = 0
 
     if projection["sport"] == "MLB":
-        actual = 2  # Replace with real MLB lookup logic
+        actual = 2  # Placeholder
 
     elif projection["sport"] == "NBA":
         try:
@@ -60,7 +60,7 @@ def evaluate_projection(projection):
 
             games_url = "https://api-nba-v1.p.rapidapi.com/games"
             headers = {
-                "x-rapidapi-key": "47945fd24fmsh2539580c53289bdp119b78jsne5525ec5acdf",
+                "x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
                 "x-rapidapi-host": "api-nba-v1.p.rapidapi.com"
             }
             params = {"date": date}
