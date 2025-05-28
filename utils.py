@@ -1,87 +1,69 @@
-import requests
 import datetime
-from supabase_client import supabase
+import requests
+from typing import Dict, Any, Optional
 
 
-def evaluate_projections_mlb():
-    from mlbgame import games, player_stats
-
-    today = datetime.date.today()
-    date_str = today.strftime("%Y-%m-%d")
-    result = supabase.table("projections").select("*").eq("sport", "MLB").eq("date", date_str).execute()
-
-    for proj in result.data:
-        player = proj['player']
-        metric = proj['metric'].lower()
-        target = proj['target']
-
-        actual = 0
-        games_list = games(today.year, today.month, today.day)
-        stats = player_stats(games_list)
-
-        for team in stats:
-            for p in team:
-                if p.name.lower() == player.lower():
-                    if metric == "hits":
-                        actual = p.hit
-                    elif metric == "homeruns":
-                        actual = p.hr
-                    elif metric == "rbi":
-                        actual = p.rbi
-                    elif metric == "runs":
-                        actual = p.r
-                    elif metric == "total bases":
-                        actual = p.tb
-                    elif metric == "stolen bases":
-                        actual = p.sb
-        met = actual >= target
-        supabase.table("projections").update({"actual": actual, "met": met}).eq("id", proj["id"]).execute()
+MLB_METRICS = ["hits", "homeruns", "RBI", "runs", "Total Bases", "stolen bases"]
+NBA_METRICS = ["points", "rebounds", "assist", "PRA", "blocks", "steals", "3pt made"]
 
 
-def get_nba_player_stats_rapidapi(name: str, date: str) -> int:
-    import os
-
-    RAPID_API_KEY = os.getenv("RAPIDAPI_KEY")
-
-    url = "https://api-nba-v1.p.rapidapi.com/players/statistics"
-    headers = {
-        "X-RapidAPI-Key": RAPID_API_KEY,
-        "X-RapidAPI-Host": "api-nba-v1.p.rapidapi.com"
-    }
-
-    query = {
-        "date": date,
-        "season": "2024",
-        "player": name
-    }
-
+def fetch_mlb_boxscore(game_pk: int) -> Optional[Dict[str, Any]]:
+    url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
     try:
-        response = requests.get(url, headers=headers, params=query)
-        response.raise_for_status()
-        stats = response.json().get("response", [])
-        if not stats:
-            print(f"[NBA] No game data for {name} on {date}")
-            return 0
-        total_points = sum(game.get("points", 0) for game in stats if "points" in game)
-        return total_points
-    except Exception as e:
-        print(f"[NBA] Error fetching stats for {name} on {date}: {e}")
-        return 0
+        response = requests.get(url)
+        if response.ok:
+            return response.json()
+    except Exception:
+        return None
+    return None
 
 
-def evaluate_projections_nba():
-    today = datetime.date.today()
-    date_str = today.strftime("%Y-%m-%d")
-    result = supabase.table("projections").select("*").eq("sport", "NBA").eq("date", date_str).execute()
+def evaluate_mlb_player_stat(boxscore: dict, player_name: str, metric: str) -> int:
+    for team in ["home", "away"]:
+        players = boxscore.get("liveData", {}).get("boxscore", {}).get("teams", {}).get(team, {}).get("players", {})
+        for data in players.values():
+            full_name = data.get("person", {}).get("fullName", "").lower()
+            if full_name == player_name.lower():
+                stats = data.get("stats", {}).get("batting", {})
+                if metric == "hits":
+                    return stats.get("hits", 0)
+                elif metric == "homeruns":
+                    return stats.get("homeRuns", 0)
+                elif metric == "RBI":
+                    return stats.get("rbi", 0)
+                elif metric == "runs":
+                    return stats.get("runs", 0)
+                elif metric == "Total Bases":
+                    return stats.get("totalBases", 0)
+                elif metric == "stolen bases":
+                    return stats.get("stolenBases", 0)
+    return 0
 
-    for proj in result.data:
-        player = proj['player']
-        metric = proj['metric'].lower()
-        target = proj['target']
 
-        actual = 0
-        if metric == "points":
-            actual = get_nba_player_stats_rapidapi(player, date_str)
+def fetch_nba_boxscore(date: str) -> list:
+    url = f"https://www.balldontlie.io/api/v1/games?dates[]={date}"
+    try:
+        response = requests.get(url)
+        if response.ok:
+            return response.json().get("data", [])
+    except Exception:
+        return []
+    return []
 
-        met = actual >= target
-        supabase.table("projections").update({"actual": actual, "met": met}).eq("id", proj["id"]).execute()
+
+def evaluate_nba_stat(player_stats: dict, metric: str) -> int:
+    if metric == "points":
+        return player_stats.get("pts", 0)
+    elif metric == "rebounds":
+        return player_stats.get("reb", 0)
+    elif metric == "assist":
+        return player_stats.get("ast", 0)
+    elif metric == "PRA":
+        return player_stats.get("pts", 0) + player_stats.get("reb", 0) + player_stats.get("ast", 0)
+    elif metric == "blocks":
+        return player_stats.get("blk", 0)
+    elif metric == "steals":
+        return player_stats.get("stl", 0)
+    elif metric == "3pt made":
+        return player_stats.get("fg3m", 0)
+    return 0
