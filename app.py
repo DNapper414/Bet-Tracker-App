@@ -11,7 +11,6 @@ from supabase_client import (
     remove_projection,
     update_projection_result
 )
-import os
 import pandas as pd
 
 st.set_page_config(page_title="Bet Tracker App", layout="centered")
@@ -54,7 +53,7 @@ if st.button("Evaluate All"):
         if row["actual"] is None:
             actual, met = evaluate_projection(row)
             update_projection_result(row["id"], actual, met)
-    st.experimental_rerun()
+    st.rerun()  # updated from st.experimental_rerun
 
 if not df.empty:
     st.subheader("📋 Your Tracker Table")
@@ -68,4 +67,4 @@ if not df.empty:
         with col2:
             if st.button("❌ Remove", key=f"rm_{row['id']}"):
                 remove_projection("guest", row["id"])
-                st.experimental_rerun()
+                st.rerun()  # updated from st.experimental_rerun
