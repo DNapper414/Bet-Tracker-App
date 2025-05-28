@@ -1,5 +1,5 @@
-import requests
 import os
+import requests
 from datetime import datetime
 from functools import lru_cache
 
@@ -12,93 +12,99 @@ FALLBACK_NBA_PLAYERS = [
     "LeBron James", "Stephen Curry", "Kevin Durant", "Jayson Tatum", "Giannis Antetokounmpo"
 ]
 
+# Headers for RapidAPI (env var from Railway)
+RAPIDAPI_HEADERS = {
+    "x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+    "x-rapidapi-host": "api-nba-v1.p.rapidapi.com"
+}
+
 @lru_cache(maxsize=128)
-def get_players_for_date(sport, date_str):
+def get_players_for_date(sport: str, date_str: str):
     if sport == "MLB":
-        return ["Aaron Judge", "Mookie Betts", "Shohei Ohtani", "Mike Trout"]
+        return ["Aaron Judge", "Shohei Ohtani", "Mike Trout", "Mookie Betts"]
 
     elif sport == "NBA":
         try:
-            games_url = "https://api-nba-v1.p.rapidapi.com/games"
-            headers = {
-                "x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
-                "x-rapidapi-host": "api-nba-v1.p.rapidapi.com"
-            }
-            params = {"date": date_str}
-            response = requests.get(games_url, headers=headers, params=params)
-            games = response.json().get("response", [])
+            url = "https://api-nba-v1.p.rapidapi.com/games"
+            games_res = requests.get(url, headers=RAPIDAPI_HEADERS, params={"date": date_str})
+            games = games_res.json().get("response", [])
 
             player_names = set()
             for game in games:
                 game_id = game.get("id")
-                stats_url = "https://api-nba-v1.p.rapidapi.com/players/statistics"
-                stat_resp = requests.get(stats_url, headers=headers, params={"game": game_id})
-                stat_data = stat_resp.json().get("response", [])
-
-                for item in stat_data:
-                    if "player" in item:
-                        full_name = f"{item['player']['firstname']} {item['player']['lastname']}"
+                stat_url = "https://api-nba-v1.p.rapidapi.com/players/statistics"
+                stat_res = requests.get(stat_url, headers=RAPIDAPI_HEADERS, params={"game": game_id})
+                stats = stat_res.json().get("response", [])
+                for item in stats:
+                    player = item.get("player")
+                    if player:
+                        full_name = f"{player['firstname']} {player['lastname']}"
                         player_names.add(full_name)
 
             return sorted(player_names) if player_names else FALLBACK_NBA_PLAYERS
-
         except Exception:
             return FALLBACK_NBA_PLAYERS
 
     return []
 
-def evaluate_projection(projection):
+def get_nba_game_ids_for_date(date_str: str):
+    try:
+        url = "https://api-nba-v1.p.rapidapi.com/games"
+        res = requests.get(url, headers=RAPIDAPI_HEADERS, params={"date": date_str})
+        games = res.json().get("response", [])
+        return [g.get("id") for g in games]
+    except Exception:
+        return []
+
+def evaluate_projection(projection: dict):
     actual = 0
 
     if projection["sport"] == "MLB":
-        actual = 2  # Placeholder
+        actual = 2  # Placeholder until live MLB stats are integrated
 
     elif projection["sport"] == "NBA":
         try:
             date = projection["date"]
             player_name = projection["player"]
 
-            games_url = "https://api-nba-v1.p.rapidapi.com/games"
-            headers = {
-                "x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
-                "x-rapidapi-host": "api-nba-v1.p.rapidapi.com"
-            }
-            params = {"date": date}
-            response = requests.get(games_url, headers=headers, params=params)
-            games = response.json().get("response", [])
+            game_ids = get_nba_game_ids_for_date(date)
 
-            for game in games:
-                game_id = game.get("id")
+            for game_id in game_ids:
                 stats_url = "https://api-nba-v1.p.rapidapi.com/players/statistics"
-                stat_resp = requests.get(stats_url, headers=headers, params={"game": game_id})
-                stat_data = stat_resp.json().get("response", [])
+                res = requests.get(stats_url, headers=RAPIDAPI_HEADERS, params={"game": game_id})
+                data = res.json().get("response", [])
 
-                for item in stat_data:
-                    full_name = f"{item['player']['firstname']} {item['player']['lastname']}"
-                    if full_name == player_name:
-                        stats = item["statistics"]
-                        if projection["metric"] == "points":
-                            actual = int(stats.get("points", 0))
-                        elif projection["metric"] == "rebounds":
-                            actual = int(stats.get("totReb", 0))
-                        elif projection["metric"] == "assist":
-                            actual = int(stats.get("assists", 0))
-                        elif projection["metric"] == "PRA":
-                            actual = (
-                                int(stats.get("points", 0)) +
-                                int(stats.get("totReb", 0)) +
-                                int(stats.get("assists", 0))
-                            )
-                        elif projection["metric"] == "blocks":
-                            actual = int(stats.get("blocks", 0))
-                        elif projection["metric"] == "steals":
-                            actual = int(stats.get("steals", 0))
-                        elif projection["metric"] == "3pt made":
-                            actual = int(stats.get("tpm", 0))
-                        break
+                for item in data:
+                    player = item.get("player")
+                    stats = item.get("statistics", {})
+                    if not player:
+                        continue
+
+                    full_name = f"{player['firstname']} {player['lastname']}"
+                    if full_name != player_name:
+                        continue
+
+                    if projection["metric"] == "points":
+                        actual = int(stats.get("points", 0))
+                    elif projection["metric"] == "rebounds":
+                        actual = int(stats.get("totReb", 0))
+                    elif projection["metric"] == "assist":
+                        actual = int(stats.get("assists", 0))
+                    elif projection["metric"] == "PRA":
+                        actual = (
+                            int(stats.get("points", 0)) +
+                            int(stats.get("totReb", 0)) +
+                            int(stats.get("assists", 0))
+                        )
+                    elif projection["metric"] == "blocks":
+                        actual = int(stats.get("blocks", 0))
+                    elif projection["metric"] == "steals":
+                        actual = int(stats.get("steals", 0))
+                    elif projection["metric"] == "3pt made":
+                        actual = int(stats.get("tpm", 0))
+                    return actual, actual >= projection["target"]
 
         except Exception:
-            actual = 0
+            pass
 
-    met = actual >= projection["target"]
-    return actual, met
+    return actual, actual >= projection["target"]
