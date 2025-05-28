@@ -1,6 +1,6 @@
 streamlit
 pandas
-statsapi
 requests
-nba_api
 supabase
+nba_api
+statsapi
