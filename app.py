@@ -1,74 +1,90 @@
 import streamlit as st
 import pandas as pd
-import datetime
-
+from datetime import datetime
+from supabase_client import supabase
 from utils import (
     get_players_for_date,
-    evaluate_projection,
-    METRICS_BY_SPORT
-)
-from supabase_client import (
-    get_projections,
-    add_projection,
-    remove_projection
+    METRICS_BY_SPORT,
+    evaluate_projection
 )
 
-st.set_page_config(page_title="Player Projection Tracker", layout="wide")
-st.title("📊 Player Projection Tracker")
+# Streamlit page setup
+st.set_page_config(page_title="Bet Tracker App", layout="wide")
 
-# Session State Defaults
+# Session state init
 if "selected_date" not in st.session_state:
-    st.session_state.selected_date = datetime.date.today()
-if "projections" not in st.session_state:
-    st.session_state.projections = []
+    st.session_state.selected_date = datetime.today().date()
+if "tracker_data" not in st.session_state:
+    st.session_state.tracker_data = pd.DataFrame(columns=[
+        "Player", "Metric", "Target", "Actual", "Met", "Date", "Sport", "User"
+    ])
 
-# Sidebar Inputs
-st.sidebar.header("Add New Projection")
-sport = st.sidebar.selectbox("Select Sport", ["NBA", "MLB"])
-selected_date = st.sidebar.date_input("Select Game Date", value=st.session_state.selected_date)
+# Title
+st.title("📊 Sports Bet Tracker")
+
+# Sidebar controls
+selected_sport = st.selectbox("Select Sport", ["MLB", "NBA"])
+selected_date = st.date_input("Select Game Date", value=st.session_state.selected_date)
 st.session_state.selected_date = selected_date
 
-players = get_players_for_date(sport, selected_date)
-player_name = st.sidebar.selectbox("Select Player", players)
-metric = st.sidebar.selectbox("Select Metric", METRICS_BY_SPORT[sport])
-target = st.sidebar.number_input("Set Target", min_value=0, step=1)
+# Dynamic player list based on sport and date
+players = get_players_for_date(selected_sport, selected_date.strftime("%Y-%m-%d"))
 
-if st.sidebar.button("Add to Table"):
-    new_row = {
-        "player": player_name,
-        "metric": metric,
-        "target": target,
-        "actual": None,
-        "met": None,
-        "date": selected_date.strftime("%Y-%m-%d"),
-        "sport": sport,
-        "user_id": "guest"
-    }
-    add_projection(new_row)
-    st.rerun()
+# Input form
+with st.form("add_projection_form"):
+    player = st.selectbox("Player", players)
+    metric = st.selectbox("Metric", METRICS_BY_SPORT[selected_sport])
+    target = st.number_input("Target", min_value=0.0, step=0.5)
+    user_id = st.text_input("User ID", value="guest")
+    submit = st.form_submit_button("Add to Tracker")
 
-# Main Table Output
-user_id = "guest"
-projections = get_projections(user_id)
-if projections and hasattr(projections, "data"):
-    df = pd.DataFrame(projections.data)
-else:
-    df = pd.DataFrame()
+    if submit:
+        new_entry = {
+            "Player": player,
+            "Metric": metric,
+            "Target": target,
+            "Actual": None,
+            "Met": None,
+            "Date": selected_date.strftime("%Y-%m-%d"),
+            "Sport": selected_sport,
+            "User": user_id
+        }
+        st.session_state.tracker_data = pd.concat(
+            [st.session_state.tracker_data, pd.DataFrame([new_entry])],
+            ignore_index=True
+        )
+        st.success("Player added to tracker.")
 
-if not df.empty:
-    for idx, row in df.iterrows():
-        if row["actual"] is None:
-            actual = evaluate_projection(row)
-            df.at[idx, "actual"] = actual
-            df.at[idx, "met"] = actual >= row["target"] if actual is not None else None
+# Evaluate Projections Button
+if st.button("Evaluate Projections"):
+    updated_rows = []
+    for i, row in st.session_state.tracker_data.iterrows():
+        actual, met = evaluate_projection(row["Sport"], row["Player"], row["Metric"], row["Date"])
+        st.session_state.tracker_data.at[i, "Actual"] = actual
+        st.session_state.tracker_data.at[i, "Met"] = met
+        updated_rows.append(i)
+    if updated_rows:
+        st.success("Projections evaluated.")
 
-    df_display = df[["player", "sport", "metric", "target", "actual", "met", "date"]]
-    df_display["met"] = df_display["met"].apply(lambda x: "✅" if x else ("❌" if x is False else ""))
-    st.dataframe(df_display, use_container_width=True)
+# Reset and Remove Buttons
+if st.button("Reset Tracker Table"):
+    st.session_state.tracker_data = pd.DataFrame(columns=st.session_state.tracker_data.columns)
 
-    for i, row in df.iterrows():
-        if st.button(f"Remove {row['player']} ({row['sport']})", key=f"remove_{i}"):
-            remove_projection(row["user_id"], row["id"])
-            st.rerun()
-else:
-    st.info("No projections found for the selected date.")
+# Display Table
+if not st.session_state.tracker_data.empty:
+    st.dataframe(st.session_state.tracker_data)
+
+# Save to Supabase (optional)
+if st.button("Save Results to Supabase"):
+    for _, row in st.session_state.tracker_data.iterrows():
+        supabase.table("projections").insert({
+            "player": row["Player"],
+            "metric": row["Metric"],
+            "target": row["Target"],
+            "actual": row["Actual"],
+            "met": row["Met"],
+            "date": row["Date"],
+            "sport": row["Sport"],
+            "user_id": row["User"]
+        }).execute()
+    st.success("Results saved to Supabase.")
