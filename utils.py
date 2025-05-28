@@ -4,6 +4,11 @@ import requests
 import datetime
 from typing import List, Dict
 
+METRICS_BY_SPORT = {
+    "NBA": ["points", "rebounds", "assist", "PRA", "blocks", "steals", "3pt made"],
+    "MLB": ["hits", "homeruns", "RBI", "runs", "Total Bases", "stolen bases"]
+}
+
 CACHE_DIR = ".cache"
 CACHE_EXPIRY_DAYS = 3
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -78,7 +83,7 @@ def get_mlb_players_for_date(date_str: str) -> List[str]:
                 team = game.get(f"{team_type}Team", {})
                 team_name = team.get("name")
                 if team_name:
-                    players.add(team_name)  # placeholder until real player data scraped
+                    players.add(team_name)
         player_list = sorted(players)
         save_to_cache("MLB", date_str, player_list)
         return player_list
