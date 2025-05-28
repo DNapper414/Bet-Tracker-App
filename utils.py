@@ -1,35 +1,37 @@
-import os
 import requests
+import os
 from datetime import datetime
 
-# NBA Player Autocomplete from RapidAPI
-def get_nba_players_for_date(game_date):
-    key = os.getenv("RAPIDAPI_KEY")
-    host = "api-nba-v1.p.rapidapi.com"
-    headers = {
-        "X-RapidAPI-Key": key,
-        "X-RapidAPI-Host": host
-    }
-    url = "https://api-nba-v1.p.rapidapi.com/players"
-    params = {"team": "all", "season": "2023"}
-
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        if response.status_code != 200:
-            print("RapidAPI error:", response.status_code)
-            return []
-        data = response.json().get("response", [])
-        return sorted(set(f"{p['firstname']} {p['lastname']}" for p in data if p.get("firstname") and p.get("lastname")))
-    except Exception as e:
-        print("NBA player fetch failed:", e)
-        return []
-
-# MLB Dummy Sample
-def get_mlb_players_for_date(game_date):
-    return sorted(["Aaron Judge", "Shohei Ohtani", "Mookie Betts"])
-
-# Available metrics by sport
 METRICS_BY_SPORT = {
     "MLB": ["hits", "homeruns", "RBI", "runs", "Total Bases", "stolen bases"],
-    "NBA": ["points", "rebounds", "assists", "PRA", "blocks", "steals", "3pt made"]
+    "NBA": ["points", "rebounds", "assist", "PRA", "blocks", "steals", "3pt made"]
 }
+
+def get_players_for_date(sport, date):
+    if sport == "MLB":
+        return ["Aaron Judge", "Mookie Betts", "Shohei Ohtani", "Mike Trout"]
+    elif sport == "NBA":
+        try:
+            url = "https://api-nba-v1.p.rapidapi.com/players"
+            headers = {
+                "X-RapidAPI-Key": os.getenv("RAPIDAPI_KEY"),
+                "X-RapidAPI-Host": os.getenv("RAPIDAPI_HOST")
+            }
+            params = {"season": "2023", "page": "1"}
+            response = requests.get(url, headers=headers, params=params)
+            data = response.json()
+            return [player["firstname"] + " " + player["lastname"] for player in data.get("response", [])]
+        except Exception:
+            return []
+    return []
+
+def evaluate_projection(projection):
+    # Dummy actual logic — replace with real API
+    if projection["sport"] == "MLB":
+        actual = 2  # Replace with real MLB logic
+    elif projection["sport"] == "NBA":
+        actual = 25  # Replace with NBA stat lookup
+    else:
+        actual = 0
+    met = actual >= projection["target"]
+    return actual, met
