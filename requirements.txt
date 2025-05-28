@@ -3,4 +3,3 @@ supabase
 nba_api
 pandas
 requests
-statsapi
