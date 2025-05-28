@@ -78,3 +78,12 @@ def get_mlb_players_for_date(date_str: str) -> List[str]:
         return player_list
     except Exception:
         return []
+
+# ✅ NEW: Unified wrapper
+def get_players_for_date(sport: str, date_str: str) -> List[str]:
+    sport = sport.strip().lower()
+    if sport == "nba":
+        return get_nba_players_for_date(date_str)
+    elif sport == "mlb":
+        return get_mlb_players_for_date(date_str)
+    return []
