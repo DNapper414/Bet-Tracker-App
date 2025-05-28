@@ -1,83 +1,97 @@
-import os
-import pandas as pd
 import streamlit as st
+import pandas as pd
 from datetime import datetime
 from utils import (
-    get_mlb_players_for_date,
-    get_nba_players_for_date,
-    evaluate_projections_mlb_statsapi,
-    evaluate_projections_nba_nbaapi,
+    get_players_for_date,
+    evaluate_projection,
+    METRICS_BY_SPORT
 )
-from supabase_client import get_projections, add_projection, remove_projection
+from supabase_client import (
+    add_projection,
+    get_projections,
+    remove_projection,
+    update_projection_result
+)
 
-st.set_page_config(page_title="📊 Bet Tracker", layout="wide")
+st.set_page_config(page_title="Bet Tracker App", layout="centered")
 
-SPORTS = ["MLB", "NBA"]
-
-METRICS = {
-    "MLB": ["hits", "homeruns", "RBI", "runs", "Total Bases", "stolen bases"],
-    "NBA": ["points", "rebounds", "assist", "PRA", "blocks", "steals", "3pt made"],
-}
-
+# --- SESSION STATE INIT ---
 if "selected_date" not in st.session_state:
-    st.session_state.selected_date = datetime.now().date()
+    st.session_state.selected_date = datetime.today().date()
 
-st.title("📊 Bet Tracker")
+if "sport" not in st.session_state:
+    st.session_state.sport = "MLB"
 
-selected_sport = st.selectbox("Choose a Sport", SPORTS)
+# --- HEADER ---
+st.title("📊 Bet Tracker App")
+st.write("Track your projections by sport, player, and metric.")
+
+# --- SPORT SELECTION ---
+st.session_state.sport = st.selectbox("Select Sport", ["MLB", "NBA"], index=["MLB", "NBA"].index(st.session_state.sport))
+
+# --- DATE SELECTION ---
 selected_date = st.date_input("Select Game Date", value=pd.to_datetime(st.session_state.selected_date))
-st.session_state.selected_date = selected_date
+st.session_state.selected_date = selected_date.date()
 
-players = (
-    get_mlb_players_for_date(selected_date) if selected_sport == "MLB"
-    else get_nba_players_for_date(selected_date)
-)
-player_name = st.selectbox("Select Player", players)
-metric = st.selectbox("Select Metric", METRICS[selected_sport])
-target = st.number_input("Set Target", min_value=0)
+# --- PLAYER SEARCH ---
+players = get_players_for_date(st.session_state.sport, st.session_state.selected_date)
+selected_player = st.selectbox("Select Player", options=players)
 
+# --- METRIC AND TARGET ---
+metric = st.selectbox("Select Metric", METRICS_BY_SPORT[st.session_state.sport])
+target = st.number_input("Enter Target", min_value=0.0, value=1.0, step=0.5)
+
+# --- ADD PROJECTION ---
 if st.button("➕ Add to Tracker"):
-    if player_name not in players:
-        st.error(f"🚫 {player_name} did not play on {selected_date}")
-    else:
-        add_projection({
-            "player": player_name,
+    if selected_player:
+        data = {
+            "user_id": "guest",
+            "player": selected_player,
             "metric": metric,
             "target": target,
             "actual": None,
             "met": None,
-            "date": selected_date.isoformat(),
-            "sport": selected_sport,
-            "user_id": "guest"
-        })
-        st.success("✅ Projection added.")
+            "date": st.session_state.selected_date.isoformat(),
+            "sport": st.session_state.sport
+        }
+        add_projection(data)
+        st.success(f"✅ Added {selected_player} - {metric} to tracker")
 
-if st.button("🧹 Reset All (Danger)"):
-    st.warning("⚠️ This feature is disabled in demo for safety.")
+# --- RESET TRACKER ---
+if st.button("🗑️ Reset Tracker"):
+    projections = get_projections("guest")
+    for p in projections.data:
+        remove_projection("guest", p["id"])
+    st.success("Tracker has been reset.")
 
+# --- GET PROJECTIONS ---
 projections = get_projections("guest")
-projections_data = projections.data if hasattr(projections, "data") else []
+if projections and projections.data:
+    st.subheader("📋 Tracked Projections")
+    df = pd.DataFrame(projections.data)
 
-if projections_data:
-    df = pd.DataFrame(projections_data).sort_values(by="date", ascending=False)
+    # --- Evaluate and Update ---
+    for i, row in df.iterrows():
+        if row["actual"] is None:
+            actual = evaluate_projection(row["player"], row["metric"], row["date"], row["sport"])
+            met = actual >= row["target"] if actual is not None else None
+            update_projection_result(row["id"], actual, met)
+            df.at[i, "actual"] = actual
+            df.at[i, "met"] = met
 
-    df_mlb = df[df["sport"] == "MLB"]
-    df_nba = df[df["sport"] == "NBA"]
+    # --- Format Display ---
+    df["Result"] = df["met"].apply(lambda x: "✅" if x else "❌" if x is False else "⏳")
+    df_display = df[["player", "metric", "target", "actual", "Result"]]
 
-    df_eval_mlb = evaluate_projections_mlb_statsapi(df_mlb) if not df_mlb.empty else pd.DataFrame()
-    df_eval_nba = evaluate_projections_nba_nbaapi(df_nba) if not df_nba.empty else pd.DataFrame()
+    # --- Remove Button ---
+    for i, row in df.iterrows():
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            st.write(df_display.iloc[i])
+        with col2:
+            if st.button("❌ Remove", key=f"remove_{row['id']}"):
+                remove_projection("guest", row["id"])
+                st.rerun()
 
-    combined = pd.concat([df_eval_mlb, df_eval_nba])
-
-    def status_icon(met):
-        if met is None:
-            return ""
-        return "✅" if met else "❌"
-
-    combined["Status"] = combined["met"].apply(status_icon)
-
-    st.dataframe(combined[[
-        "date", "sport", "player", "metric", "target", "actual", "Status"
-    ]], use_container_width=True)
 else:
-    st.info("No projections to show yet.")
+    st.info("Add a player to start tracking results.")
