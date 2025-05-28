@@ -1,47 +1,48 @@
 import streamlit as st
-from datetime import date
 import pandas as pd
+from datetime import datetime
 from supabase_client import get_projections, add_projection, remove_projection, update_projection_result
-from utils import evaluate_projections_mlb, evaluate_projections_nba
+from utils import (
+    fetch_mlb_boxscore,
+    evaluate_mlb_player_stat,
+    fetch_nba_boxscore,
+    evaluate_nba_stat,
+    MLB_METRICS,
+    NBA_METRICS
+)
 
 st.set_page_config(page_title="Bet Tracker", layout="wide")
-st.title("📊 Bet Tracker App")
+st.title("📊 Bet Tracker")
 
-def get_default_date():
-    return st.session_state.get("selected_date", date.today())
-
+# Persist date selection
 if "selected_date" not in st.session_state:
-    st.session_state.selected_date = date.today()
+    st.session_state.selected_date = datetime.today().strftime("%Y-%m-%d")
 
 selected_date = st.date_input("Select Game Date", value=pd.to_datetime(st.session_state.selected_date))
-st.session_state.selected_date = selected_date
+st.session_state.selected_date = selected_date.strftime("%Y-%m-%d")
 
-sport = st.radio("Select Sport", ["MLB", "NBA"], horizontal=True)
+# Sport selection
+sport = st.selectbox("Select Sport", ["MLB", "NBA"])
 
-# Player lists
-def load_mlb_players():
-    try:
-        df = pd.read_csv("sample_projections.csv")
-        return sorted(df["player"].dropna().unique())
-    except:
-        return []
+# Load player lists
+@st.cache_data
+def load_player_pool(sport):
+    if sport == "MLB":
+        return ["Aaron Judge", "Shohei Ohtani", "Juan Soto", "Ronald Acuña Jr."]
+    else:
+        return ["LeBron James", "Stephen Curry", "Jayson Tatum", "Nikola Jokic"]
 
-def load_nba_players():
-    return [
-        "LeBron James", "Stephen Curry", "Luka Doncic", "Jayson Tatum",
-        "Shai Gilgeous-Alexander", "Giannis Antetokounmpo", "Alex Caruso"
-    ]
+players = load_player_pool(sport)
 
-player_list = load_mlb_players() if sport == "MLB" else load_nba_players()
+# UI Inputs
+player = st.selectbox("Select Player", players)
+metric_list = MLB_METRICS if sport == "MLB" else NBA_METRICS
+metric = st.selectbox("Metric", metric_list)
+target = st.number_input("Target", min_value=0, step=1)
 
-with st.form("add_form"):
-    player = st.selectbox("Select Player", player_list)
-    metric = st.selectbox("Metric", ["points", "rebounds", "assists"] if sport == "NBA" else ["hits", "runs", "home_runs"])
-    target = st.number_input("Target", min_value=0.0, step=0.5)
-    submit = st.form_submit_button("Add to Table")
-
-if submit and player and metric and target:
-    new_proj = {
+# Add player button
+if st.button("➕ Add to Tracker"):
+    new_entry = {
         "player": player,
         "metric": metric,
         "target": target,
@@ -51,44 +52,52 @@ if submit and player and metric and target:
         "sport": sport,
         "user_id": "guest"
     }
-    add_projection(new_proj)
-    st.success("Added successfully!")
+    add_projection(new_entry)
 
-if st.button("Reset Table"):
-    projections = get_projections("guest")
-    for row in projections.data:
+# Reset all
+if st.button("🗑 Reset Table"):
+    user_projections = get_projections("guest")
+    for row in user_projections.data:
         remove_projection("guest", row["id"])
-    st.success("Table cleared.")
 
-if st.button("Evaluate Results"):
-    projections = get_projections("guest")
-    rows = projections.data if projections else []
-    evaluate_projections_mlb(rows)
-    evaluate_projections_nba(rows)
-    st.success("Evaluated actual results.")
+# Fetch and display results
+user_projections = get_projections("guest")
+if user_projections.data:
+    updated_rows = []
+    for proj in user_projections.data:
+        if proj["actual"] is None:
+            date_str = proj["date"]
+            if proj["sport"] == "MLB":
+                # Simulate gamePk lookup for example purpose
+                sample_game_pk = 777782
+                box = fetch_mlb_boxscore(sample_game_pk)
+                actual = evaluate_mlb_player_stat(box, proj["player"], proj["metric"]) if box else 0
+            else:
+                box_scores = fetch_nba_boxscore(date_str)
+                actual = 0
+                for game in box_scores:
+                    for player_stats in game.get("player_stats", []):
+                        if player_stats.get("player_name", "").lower() == proj["player"].lower():
+                            actual = evaluate_nba_stat(player_stats, proj["metric"])
+                            break
 
-# Results table (MLB + NBA filtered by date)
-projections = get_projections("guest")
-rows = projections.data if projections else []
+            met = actual >= proj["target"]
+            update_projection_result(proj["id"], actual, met)
 
-if rows:
-    df = pd.DataFrame(rows)
-    df = df[df["date"] == selected_date.strftime("%Y-%m-%d")]
-    df = df.sort_values("player")
+    # Refresh after update
+    user_projections = get_projections("guest")
 
-    def display_status(met):
-        return "✅" if met else ("❌" if met is not None else "")
+    df = pd.DataFrame(user_projections.data)
+    df["Met"] = df["met"].apply(lambda x: "✅" if x else "❌" if x is not None else "⏳")
+    df["Remove"] = df["id"].apply(lambda i: f"❌ Remove {i}")
 
-    df["Status"] = df["met"].apply(display_status)
-    df["Remove"] = df["id"].apply(lambda i: f"Remove-{i}")
+    df_display = df[["player", "metric", "target", "actual", "Met", "Remove"]]
+    st.dataframe(df_display, use_container_width=True)
 
-    display_df = df[["player", "metric", "target", "actual", "Status"]]
-    st.dataframe(display_df.rename(columns={
-        "player": "Player", "metric": "Metric", "target": "Target",
-        "actual": "Actual", "Status": "Result"
-    }), use_container_width=True)
-
-    for row in df.itertuples():
-        if st.button("Remove", key=row.id):
-            remove_projection("guest", row.id)
+    # Handle remove button
+    for i in df["id"]:
+        if st.button(f"Remove {i}"):
+            remove_projection("guest", i)
             st.experimental_rerun()
+else:
+    st.info("No projections added yet.")
