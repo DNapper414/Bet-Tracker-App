@@ -1,9 +1,10 @@
 import os
-import requests
 import json
+import requests
 from datetime import datetime
 from functools import lru_cache
 
+# Supported metrics by sport
 METRICS_BY_SPORT = {
     "MLB": ["hits", "homeruns", "RBI", "runs", "Total Bases", "stolen bases"],
     "NBA": ["points", "rebounds", "assist", "PRA", "blocks", "steals", "3pt made"]
@@ -110,24 +111,27 @@ def evaluate_projection(projection: dict):
                     continue
 
                 stat = stats[0].get("statistics", {})
+                points = int(stat.get("points", 0))
+                rebounds = int(stat.get("totReb", 0))
+                assists = int(stat.get("assists", 0))
+                blocks = int(stat.get("blocks", 0))
+                steals = int(stat.get("steals", 0))
+                three_pt = int(stat.get("fg3m", 0))  # or "tpm"
+
                 if metric == "points":
-                    actual = int(stat.get("points", 0))
+                    actual = points
                 elif metric == "rebounds":
-                    actual = int(stat.get("totReb", 0))
+                    actual = rebounds
                 elif metric == "assist":
-                    actual = int(stat.get("assists", 0))
+                    actual = assists
                 elif metric == "PRA":
-                    actual = (
-                        int(stat.get("points", 0)) +
-                        int(stat.get("totReb", 0)) +
-                        int(stat.get("assists", 0))
-                    )
+                    actual = points + rebounds + assists
                 elif metric == "blocks":
-                    actual = int(stat.get("blocks", 0))
+                    actual = blocks
                 elif metric == "steals":
-                    actual = int(stat.get("steals", 0))
+                    actual = steals
                 elif metric == "3pt made":
-                    actual = int(stat.get("tpm", 0))
+                    actual = three_pt
 
                 return actual, actual >= projection["target"]
 
