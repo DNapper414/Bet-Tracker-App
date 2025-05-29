@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 from datetime import datetime
 from functools import lru_cache
 
@@ -17,12 +18,19 @@ RAPIDAPI_HEADERS = {
     "x-rapidapi-host": "api-nba-v1.p.rapidapi.com"
 }
 
-@lru_cache(maxsize=128)
+CACHE_DIR = "cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
 def get_players_for_date(sport: str, date_str: str):
     if sport == "MLB":
         return ["Aaron Judge", "Shohei Ohtani", "Mike Trout", "Mookie Betts"]
 
     elif sport == "NBA":
+        cache_file = os.path.join(CACHE_DIR, f"nba_players_{date_str}.json")
+        if os.path.exists(cache_file):
+            with open(cache_file, "r") as f:
+                return json.load(f)
+
         try:
             url = "https://api-nba-v1.p.rapidapi.com/games"
             games_res = requests.get(url, headers=RAPIDAPI_HEADERS, params={"date": date_str})
@@ -40,7 +48,10 @@ def get_players_for_date(sport: str, date_str: str):
                         name = f"{player['firstname']} {player['lastname']}"
                         player_names.add(name)
 
-            return sorted(player_names) if player_names else FALLBACK_NBA_PLAYERS
+            result = sorted(player_names) if player_names else FALLBACK_NBA_PLAYERS
+            with open(cache_file, "w") as f:
+                json.dump(result, f)
+            return result
         except Exception as e:
             print("NBA player list fetch failed:", e)
             return FALLBACK_NBA_PLAYERS
@@ -86,7 +97,6 @@ def evaluate_projection(projection: dict):
 
             game_ids = get_nba_game_ids_for_date(date)
             player_id = get_nba_player_id(player_name)
-            print(f"🧩 Evaluating {player_name} for {metric} | ID: {player_id}")
 
             if not player_id:
                 print("❌ Player ID not found.")
