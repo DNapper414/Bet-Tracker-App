@@ -1,11 +1,13 @@
+import os
 import requests
 import json
 from datetime import datetime
 from pathlib import Path
 
-# Constants
-RAPIDAPI_KEY = "your_rapidapi_key_here"
-RAPIDAPI_HOST = "api-nba-v1.p.rapidapi.com"
+# Load RapidAPI credentials from Railway environment variables
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")
+
 NBA_CACHE_PATH = Path("nba_cache.json")
 
 METRICS_BY_SPORT = {
@@ -13,7 +15,7 @@ METRICS_BY_SPORT = {
     "MLB": ["hits", "homeruns", "RBI", "runs", "Total Bases", "stolen bases"]
 }
 
-# Load or initialize cache
+# Load or initialize NBA cache file
 if NBA_CACHE_PATH.exists():
     with open(NBA_CACHE_PATH, "r") as f:
         nba_cache = json.load(f)
@@ -30,7 +32,7 @@ def get_nba_players_for_date(date_str):
     if date_str in nba_cache:
         return nba_cache[date_str]
 
-    url = f"https://api-nba-v1.p.rapidapi.com/games"
+    url = f"https://{RAPIDAPI_HOST}/games"
     query = {"date": date_str}
     headers = {
         "x-rapidapi-host": RAPIDAPI_HOST,
@@ -43,7 +45,7 @@ def get_nba_players_for_date(date_str):
     player_names = set()
     for game in games:
         game_id = game["id"]
-        stats_url = f"https://api-nba-v1.p.rapidapi.com/players/statistics"
+        stats_url = f"https://{RAPIDAPI_HOST}/players/statistics"
         stats_query = {"game": game_id}
         stats_resp = requests.get(stats_url, headers=headers, params=stats_query)
         stats = stats_resp.json().get("response", [])
@@ -78,7 +80,7 @@ def evaluate_projection_nba(date, player, metric):
     }
 
     games_resp = requests.get(
-        "https://api-nba-v1.p.rapidapi.com/games",
+        f"https://{RAPIDAPI_HOST}/games",
         headers=headers,
         params={"date": date}
     )
@@ -87,7 +89,7 @@ def evaluate_projection_nba(date, player, metric):
     for game in games:
         game_id = game["id"]
         stats_resp = requests.get(
-            "https://api-nba-v1.p.rapidapi.com/players/statistics",
+            f"https://{RAPIDAPI_HOST}/players/statistics",
             headers=headers,
             params={"game": game_id}
         )
@@ -95,7 +97,7 @@ def evaluate_projection_nba(date, player, metric):
         for s in stats:
             name = s["player"]["firstname"] + " " + s["player"]["lastname"]
             if name == player:
-                return extract_nba_stat(s, metric), None  # Skip met calc here
+                return extract_nba_stat(s, metric), None
     return 0, None
 
 def extract_nba_stat(stat, metric):
@@ -120,7 +122,6 @@ def extract_nba_stat(stat, metric):
     return 0
 
 def evaluate_projection_mlb(date, player, metric):
-    # Dummy MLB fallback
     sample_stats = {
         "hits": 2, "homeruns": 1, "RBI": 3, "runs": 1, "Total Bases": 5, "stolen bases": 1
     }
