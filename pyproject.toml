@@ -10,5 +10,4 @@ streamlit = "*"
 pandas = "*"
 requests = "*"
 supabase = "*"
-nba_api = "*"
-statsapi = "*"
+
