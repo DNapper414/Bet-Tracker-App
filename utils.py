@@ -31,18 +31,24 @@ def get_nba_players_for_date(date_str):
         team_ids.add(game['visitor_team']['id'])
 
     player_names = set()
+
     for team_id in team_ids:
-        team_players_url = f"{BALLEDONTLIE_BASE}/players?per_page=100&team_ids[]={team_id}"
-        try:
-            team_response = requests.get(team_players_url, timeout=10)
-            team_response.raise_for_status()
-            players = team_response.json().get("data", [])
-            for player in players:
-                full_name = f"{player['first_name']} {player['last_name']}"
-                player_names.add(full_name)
-        except Exception as e:
-            print(f"[NBA] Failed to fetch roster for team {team_id}: {e}")
-            continue
+        page = 1
+        while True:
+            team_players_url = f"{BALLEDONTLIE_BASE}/players?per_page=100&page={page}&team_ids[]={team_id}"
+            try:
+                team_response = requests.get(team_players_url, timeout=10)
+                team_response.raise_for_status()
+                players = team_response.json().get("data", [])
+                if not players:
+                    break
+                for player in players:
+                    full_name = f"{player['first_name']} {player['last_name']}"
+                    player_names.add(full_name)
+                page += 1
+            except Exception as e:
+                print(f"[NBA] Failed to fetch roster for team {team_id} on page {page}: {e}")
+                break
 
     return sorted(player_names)
 
