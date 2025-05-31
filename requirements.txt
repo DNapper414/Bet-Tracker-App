@@ -1,4 +1,5 @@
-streamlit>=1.18.0
-supabase
-pandas
+nba_api
 requests
+pandas
+streamlit
+supabase
