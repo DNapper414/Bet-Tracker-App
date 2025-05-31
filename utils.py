@@ -15,7 +15,6 @@ def get_players_for_date(sport, date_str):
     else:
         return get_mlb_players_for_date(date_str)
 
-# NBA player fetch using teams -> rosters
 def get_nba_players_for_date(date_str):
     url = f"{BALLEDONTLIE_BASE}/games?start_date={date_str}&end_date={date_str}"
     try:
@@ -47,7 +46,6 @@ def get_nba_players_for_date(date_str):
 
     return sorted(player_names)
 
-# MLB player fetch using teams -> rosters
 def get_mlb_players_for_date(date_str):
     schedule_url = f"{MLB_BASE}/schedule?sportId=1&date={date_str}"
     try:
@@ -83,7 +81,9 @@ def get_mlb_players_for_date(date_str):
     return sorted(player_names)
 
 def evaluate_projection(row):
-    actual = row.get("actual", 0)
+    actual = row.get("actual")
     target = row.get("target", 0)
+    if actual is None:
+        return None, None
     met = actual >= target
     return actual, met
