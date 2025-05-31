@@ -11,47 +11,34 @@ METRICS_BY_SPORT = {
 
 def get_players_for_date(sport, date_str):
     if sport == "NBA":
-        return get_nba_players_for_date(date_str)
+        return get_all_nba_players()
     else:
         return get_mlb_players_for_date(date_str)
 
-def get_nba_players_for_date(date_str):
-    url = f"{BALLEDONTLIE_BASE}/games?start_date={date_str}&end_date={date_str}"
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        games = response.json().get("data", [])
-    except Exception as e:
-        print(f"[NBA] Failed to fetch games: {e}")
-        return []
-
-    team_ids = set()
-    for game in games:
-        team_ids.add(game['home_team']['id'])
-        team_ids.add(game['visitor_team']['id'])
-
+# Hardened NBA: full active player list
+def get_all_nba_players():
     player_names = set()
-
-    for team_id in team_ids:
-        page = 1
-        while True:
-            team_players_url = f"{BALLEDONTLIE_BASE}/players?per_page=100&page={page}&team_ids[]={team_id}"
-            try:
-                team_response = requests.get(team_players_url, timeout=10)
-                team_response.raise_for_status()
-                players = team_response.json().get("data", [])
-                if not players:
-                    break
-                for player in players:
-                    full_name = f"{player['first_name']} {player['last_name']}"
-                    player_names.add(full_name)
-                page += 1
-            except Exception as e:
-                print(f"[NBA] Failed to fetch roster for team {team_id} on page {page}: {e}")
+    page = 1
+    while True:
+        url = f"{BALLEDONTLIE_BASE}/players?per_page=100&page={page}"
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            players = data.get("data", [])
+            if not players:
                 break
+            for player in players:
+                full_name = f"{player['first_name']} {player['last_name']}"
+                player_names.add(full_name)
+            page += 1
+        except Exception as e:
+            print(f"[NBA] Failed to fetch players on page {page}: {e}")
+            break
 
     return sorted(player_names)
 
+# MLB: keep using daily schedule + team rosters
 def get_mlb_players_for_date(date_str):
     schedule_url = f"{MLB_BASE}/schedule?sportId=1&date={date_str}"
     try:
@@ -86,6 +73,7 @@ def get_mlb_players_for_date(date_str):
 
     return sorted(player_names)
 
+# Safe evaluator
 def evaluate_projection(row):
     actual = row.get("actual")
     target = row.get("target", 0)
