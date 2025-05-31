@@ -1,4 +1,5 @@
 import requests
+import json
 from datetime import datetime
 
 BALLEDONTLIE_BASE = "https://www.balldontlie.io/api/v1"
@@ -15,30 +16,17 @@ def get_players_for_date(sport, date_str):
     else:
         return get_mlb_players_for_date(date_str)
 
-# Hardened NBA: full active player list
+# Load NBA players from static file
 def get_all_nba_players():
-    player_names = set()
-    page = 1
-    while True:
-        url = f"{BALLEDONTLIE_BASE}/players?per_page=100&page={page}"
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            players = data.get("data", [])
-            if not players:
-                break
-            for player in players:
-                full_name = f"{player['first_name']} {player['last_name']}"
-                player_names.add(full_name)
-            page += 1
-        except Exception as e:
-            print(f"[NBA] Failed to fetch players on page {page}: {e}")
-            break
+    try:
+        with open("nba_players.json", "r") as f:
+            player_list = json.load(f)
+        return sorted(player_list)
+    except Exception as e:
+        print(f"Failed to load nba_players.json: {e}")
+        return []
 
-    return sorted(player_names)
-
-# MLB: keep using daily schedule + team rosters
+# MLB fetching remains live, based on schedule + rosters
 def get_mlb_players_for_date(date_str):
     schedule_url = f"{MLB_BASE}/schedule?sportId=1&date={date_str}"
     try:
@@ -73,7 +61,7 @@ def get_mlb_players_for_date(date_str):
 
     return sorted(player_names)
 
-# Safe evaluator
+# Safely evaluate projections
 def evaluate_projection(row):
     actual = row.get("actual")
     target = row.get("target", 0)
