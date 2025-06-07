@@ -1,5 +1,0 @@
-nba_api
-requests
-pandas
-streamlit
-supabase
